@@ -3,7 +3,7 @@ library(xgboost)
 library(data.table)
 library(dplyr)
 library(psych)
-
+fileEncoding="UTF-8-BOM"
 train = read.csv('./train.csv')
 test = read.csv('./test.csv')
 ### build xgboost as base line ####
@@ -15,7 +15,9 @@ all = train%>%
   mutate(Station = as.numeric(as.factor(Station)))%>%
   mutate(County = as.numeric(as.factor(County)))%>%
   mutate(Location = as.numeric(as.factor(Location)))%>%
-  mutate(LEVEL = LEVEL-1)
+  mutate(LEVEL = LEVEL-1)%>%
+  rename (shore_line = 海岸段)
+
 # feature engineering 
 # back to train and test with all numeric columns
 train = all %>% filter(!is.na(LEVEL))
@@ -85,7 +87,7 @@ confusionMatrix(factor(test_prediction$max_prob),
                 mode = "everything")
 # local leaderboard
 temp=cohen.kappa(factor(test_prediction$max_prob)%>%cbind(
-            factor(test_prediction$label)))
+  factor(test_prediction$label)))
 temp$weighted.kappa
 # xgboost importance csv saving 
 names <-  colnames(train[,-35])
@@ -99,7 +101,7 @@ full_model =xgb.train(params = xgb_params,
                       nrounds = nround)
 upload_pred <- predict(bst_model, newdata = upload_data)
 upload_prediction <- matrix(upload_pred, nrow = numberOfClasses,
-                          ncol=length(upload_pred)/numberOfClasses) %>%
+                            ncol=length(upload_pred)/numberOfClasses) %>%
   t() %>%
   data.frame()%>%
   mutate(LEVEL= max.col(., "last"))%>%
