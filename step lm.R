@@ -59,8 +59,9 @@ lm_model = lm(formula = LEVEL ~ Station + Season + Lon + 縣市 + 海岸段 +
      X8遮蔽岩岸 + Plastic.bottle.container + Foam.material + 
      Float + Fishing.nets.and.ropes + Cigarette.and.lighter + 
      Metal + Others, data = train)
-summary(lm_model) # R-square 0.4814
-
+a = summary(lm_model)['coefficients'] # R-square 0.4814
+b=a$coefficients%>%as.data.frame()
+b$Estimate
 upload$LEVEL = predict(lm_model,newdata = upload)
 #### full / upload ####
 test = read.csv('./test.csv')

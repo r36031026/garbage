@@ -3,9 +3,11 @@ library(xgboost)
 library(data.table)
 library(dplyr)
 library(psych)
-fileEncoding="UTF-8-BOM"
+library(FNN)
 train = read.csv('./train.csv')
 test = read.csv('./test.csv')
+train%>%View()
+test%>%View()
 ### build xgboost as base line ####
 set.seed(707)
 #### featuring ####
@@ -15,33 +17,23 @@ all = train%>%
   mutate(Station = as.numeric(as.factor(Station)))%>%
   mutate(County = as.numeric(as.factor(County)))%>%
   mutate(Location = as.numeric(as.factor(Location)))%>%
-  mutate(LEVEL = LEVEL-1)%>%
-  rename (shore_line = 海岸段)
+  rename (shore_line = 海岸段)%>%
+  rename(city = 縣市)
+
+
 
 # feature engineering 
 # back to train and test with all numeric columns
 train = all %>% filter(!is.na(LEVEL))
 upload = all %>% filter(is.na(LEVEL))
+train$LEVEL
+knn.reg(train[,c("Seat",'city','Season')], test = upload[,c("Seat",'city','Season')], train[,"LEVEL"], k = 3, algorithm=c("kd_tree"))
+knn.reg(train[,c("Seat",'city')], test = upload[,c("Seat",'city')], train[,"LEVEL"], k = 3, algorithm=c("kd_tree"))
 
 
 #### modeling train--> train/test --> model ####
 # Full data set
 train_index <- sample(1:nrow(train), nrow(train)*0.75)
-data_variables <- as.matrix(train[,-35])
-data_label <- train[,"LEVEL"]
-data_matrix <- xgb.DMatrix(data = as.matrix(train), label = data_label)
-# split train data and make xgb.DMatrix
-train_data   <- data_variables[train_index,]
-train_label  <- data_label[train_index]
-train_matrix <- xgb.DMatrix(data = train_data, label = train_label)
-# split test data and make xgb.DMatrix
-test_data  <- data_variables[-train_index,]
-test_label <- data_label[-train_index]
-test_matrix <- xgb.DMatrix(data = test_data, label = test_label)
-# full data set 
-full_matrix = xgb.DMatrix(data = data_variables,label = data_label)
-# upload date 
-upload_data <- xgb.DMatrix(data =as.matrix(upload[-35]))
 
 #### train and test part 1 ####
 # xgboost find best cv 
