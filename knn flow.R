@@ -6,6 +6,15 @@ library(psych)
 library(FNN)
 train = read.csv('./train.csv')
 test = read.csv('./test.csv')
+train%>%
+  bind_rows(test)%>%
+  arrange(Station,County)%>%
+  select(Station,County,LEVEL)%>%
+  View()
+
+test%>%filter(County %in%intersect(train$County,
+test$County))%>%View()
+
 train%>%View()
 test%>%View()
 ### build xgboost as base line ####
@@ -17,16 +26,9 @@ all = train%>%
   mutate(Station = as.numeric(as.factor(Station)))%>%
   mutate(County = as.numeric(as.factor(County)))%>%
   mutate(Location = as.numeric(as.factor(Location)))%>%
-<<<<<<< HEAD
   rename (shore_line = 海岸段)%>%
   rename(city = 縣市)
-
-
-=======
-  mutate(LEVEL = LEVEL-1)%>%
-  rename (shore_line = 海岸段)%>%
-  rename(city = 縣市)
->>>>>>> 992268241b7712cc7f9806c0c2f3dceab42e6bc1
+all%>%View()
 
 all%>%
   # separate the station part for EN and NUMERIC part for KNN 
@@ -75,7 +77,8 @@ a = train%>%
          min_CSS = min(LEVEL),
          median_CSS = median(LEVEL)
   )
-  a%>%View()
+
+a%>%View()
 train%>%names()
   
 # feature engineering 
