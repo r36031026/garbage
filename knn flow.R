@@ -17,11 +17,67 @@ all = train%>%
   mutate(Station = as.numeric(as.factor(Station)))%>%
   mutate(County = as.numeric(as.factor(County)))%>%
   mutate(Location = as.numeric(as.factor(Location)))%>%
+<<<<<<< HEAD
   rename (shore_line = 海岸段)%>%
   rename(city = 縣市)
 
 
+=======
+  mutate(LEVEL = LEVEL-1)%>%
+  rename (shore_line = 海岸段)%>%
+  rename(city = 縣市)
+>>>>>>> 992268241b7712cc7f9806c0c2f3dceab42e6bc1
 
+all%>%
+  # separate the station part for EN and NUMERIC part for KNN 
+  mutate(station_num = gsub("[^0-9.-]","",Station),
+         station_num = as.numeric(station_num))%>%
+  mutate(station_EN = gsub("[^A-Z]","",Station))%>%
+  # make the Seat simple version 
+  mutate(Seat_simple = case_when(Seat%in%c(1,2,8)~ 'north',
+                                 Seat%in%c(2,3,4)~ 'west',
+                                 Seat%in%c(4,5,6)~ 'south',
+                                 Seat%in%c(6,7,8)~ 'east'))
+# some mapping table of mean and sd with level info 
+a = train%>%
+  group_by(County,Season)%>%
+  mutate(mean_county_season = mean(LEVEL,na.rm= T),
+         sd_county_season = sd(LEVEL,na.rm =T))%>%
+  ungroup()%>%
+  group_by(County)%>%
+  mutate(mean_county = mean(LEVEL,na.rm= T),
+         sd_county = sd(LEVEL,na.rm =T),
+         max_county = max(LEVEL),
+         min_county = min(LEVEL),
+         median_county = median(LEVEL)
+         )%>%
+  ungroup()%>%
+  group_by(Season,Seat)%>%
+  mutate(mean_season_seat = mean(LEVEL,na.rm = T),
+         sd_season_seat = sd(LEVEL,na.rm =T),
+         max_season_seat = max(LEVEL),
+         min_season_seat = min(LEVEL),
+         median_season_seat = median(LEVEL)
+  )%>%
+  ungroup()%>%
+  group_by(Seat)%>%
+  mutate(mean_seat = mean(LEVEL,na.rm = T),
+         sd_seat = sd(LEVEL,na.rm = T),
+         max_seat = max(LEVEL),
+         min_seat = min(LEVEL),
+         median_seat = median(LEVEL)
+  )%>%
+  ungroup()%>%
+  group_by(County,Season,Seat)%>%
+  mutate(mean_CSS = mean(LEVEL,na.rm = T),
+         sd_CSS = sd(LEVEL,na.rm = T),
+         max_CSS = max(LEVEL),
+         min_CSS = min(LEVEL),
+         median_CSS = median(LEVEL)
+  )
+  a%>%View()
+train%>%names()
+  
 # feature engineering 
 # back to train and test with all numeric columns
 train = all %>% filter(!is.na(LEVEL))
