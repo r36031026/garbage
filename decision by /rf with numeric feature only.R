@@ -34,8 +34,8 @@ all = train%>%
   left_join(most_polluted13)%>%
   replace_na(list(most_polluted_13=0))%>%
   # separate the station part for EN and NUMERIC part for KNN 
- # mutate(station_num = gsub("[^0-9.-]","",Station),
-#         station_num = as.numeric(station_num))%>%
+  # mutate(station_num = gsub("[^0-9.-]","",Station),
+  #         station_num = as.numeric(station_num))%>%
   mutate(station_EN = gsub("[^A-Z]","",Station),
          station_EN = as.factor(station_EN))%>%
   # make the Seat simple version 
@@ -50,31 +50,31 @@ all = train%>%
   select(-c(type_of_shore_by_sea_strongess))%>%
   mutate(top_3_place = ifelse(X1暴露岩岸+X2暴露人造結構物+X4沙灘+X5砂礫混合灘+X6礫石灘>=2,1,0))%>%
   mutate(place_order_one_column = as.factor(case_when(X1暴露岩岸==1~'X1',
-                                            X2暴露人造結構物==1~'X2',
-                                            X3暴露岩盤==1~'X3',
-                                            X4沙灘==1~'X4',
-                                            X5砂礫混合灘==1~'X5',
-                                            X6礫石灘==1~'X6',
-                                            X7開闊潮間帶==1~'X7',
-                                            X8遮蔽岩岸==1~'X8',
-                                            X9遮蔽潮間帶==1~'X9',
-                                            X10遮蔽濕地==1~'X10',
-                                            TRUE~'X0'
+                                                      X2暴露人造結構物==1~'X2',
+                                                      X3暴露岩盤==1~'X3',
+                                                      X4沙灘==1~'X4',
+                                                      X5砂礫混合灘==1~'X5',
+                                                      X6礫石灘==1~'X6',
+                                                      X7開闊潮間帶==1~'X7',
+                                                      X8遮蔽岩岸==1~'X8',
+                                                      X9遮蔽潮間帶==1~'X9',
+                                                      X10遮蔽濕地==1~'X10',
+                                                      TRUE~'X0'
   )))%>%
   mutate(stationEN_place = as.factor(paste0(station_EN,place_order_one_column)))%>%
   # make it factor for xgboost 
   mutate(Station = as.factor(Station))%>%
   mutate(County = as.factor(County))%>%
-  mutate(Location = as.factor(Location))
-  # if need all numeric 
+  mutate(Location = as.factor(Location))%>%
+# if need all numeric 
   mutate(Station = as.numeric(Station))%>%
   mutate(County = as.numeric(County))%>%
   mutate(Location = as.numeric(Location))%>%
   mutate(place_order_one_column = as.numeric(place_order_one_column))%>%
   mutate(stationEN_place =as.numeric(stationEN_place))%>%
   mutate(station_EN = as.numeric(station_EN))
-  # remove the bad features
-  
+# remove the bad features
+
 sapply(all, function(x) sum(is.na(x)))
 all%>%glimpse()
 # some mapping table of mean and sd with level info 
@@ -134,11 +134,11 @@ upload = all %>% filter(is.na(LEVEL))
 
 
 fit_rf <- train(LEVEL ~ ., data=train, method='rf') 
-upload$LEVEL = predict(fit_rf,newdata= upload)
+test$LEVEL = predict(fit_rf,newdata= upload)
 # write
-upload%>% 
+test%>%  
   mutate(LEVEL = round(LEVEL))%>%
   mutate(ID = paste0(Station,'_',Season))%>%
   select(ID,LEVEL)%>%
-  fwrite('./rf_v1.csv',row.names = FALSE)
+  fwrite('./rf_v2_numericf.csv',row.names = FALSE)
 

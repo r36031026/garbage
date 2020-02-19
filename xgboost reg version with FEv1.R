@@ -19,9 +19,6 @@ all = train%>%
   # separate the station part for EN and NUMERIC part for KNN 
   mutate(station_EN = gsub("[^A-Z]","",Station),
          station_EN = as.factor(station_EN))%>%
-  mutate(Station = as.factor(Station))%>%
-  mutate(County = as.numeric(as.factor(County)))%>%
-  mutate(Location = as.numeric(as.factor(Location)))%>%
   mutate(seat_season_combo = as.factor(paste0(Season,Seat)))%>%
   mutate(seat_shore_combo = as.factor(paste0(海岸段,Seat)))%>%
   mutate(seat_Region_combo = as.factor(paste0(Region,Seat)))%>%
@@ -55,7 +52,19 @@ all = train%>%
   mutate(final_type_shore_by_sea_strongness = type_of_shore_by_sea_strongess/number_of_shore_type)%>%
   select(-c(type_of_shore_by_sea_strongess))%>%
  mutate(total_kind_garbage = Fishing.equipment+Fishing.nets.and.ropes+Metal+Foam.material+Paper+Plastic.bottle.container+Plastic.bag+Glass.jar+Others+Cigarette.and.lighter+Float)%>%
- mutate(east = ifelse(Region%in%c(2,5),1,0))
+ mutate(east = ifelse(Region%in%c(2,5),1,0))%>%
+  # most polluted sea shore in Taiwan take up 50% of trash 
+  left_join(
+    train%>%
+      bind_rows(test)%>%
+      filter_all(any_vars(grepl(pattern="(瑞芳|大城|青草|分洪道|六輕|白玉|白水|濆水|慶安北路|通宵|竹圍|國聖|布袋)", .)))%>%
+      mutate(most_polluted_13 = 1)%>%
+      select(County,Location,most_polluted_13)
+  )%>%
+  replace_na(list(most_polluted_13=0))%>%
+  mutate(Station = as.factor(Station))%>%
+  mutate(County = as.factor(County))%>%
+  mutate(Location = as.factor(Location))
 
 # 海岸段 season seat combination level
 ssc_rank = all%>%
@@ -71,10 +80,21 @@ Location_LEVEL = all%>%
   filter(!is.na(LEVEL))%>%
   group_by(Location)%>%
   summarise(location_ml = mean(LEVEL))
+
 all%>%nrow()
 all = all%>%
   left_join(Location_LEVEL)%>%
   left_join(ssc_rank)
+
+
+
+correlationMatrix <- cor(all%>%)
+# summarize the correlation matrix
+print(correlationMatrix)
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
 
 
 # feature engineering 
@@ -119,22 +139,12 @@ xgb_train_1 = train(
   tuneGrid = xgb_grid_1,
   method = "xgbTree"
 )
-# # compute feature importance matrix
-
 plot(xgb_train_1)
+
 upload$LEVEL= predict(xgb_train_1,newdata = data.matrix(upload)  )
-upload%>%mutate(LEVEL = case_when(LEVEL>=512~10,
-                                  LEVEL>=256~9,
-                                  LEVEL>=128~8,
-                                  LEVEL>=64~7,
-                                  LEVEL>=32~6,
-                                  LEVEL>=16~5,
-                                  LEVEL>=8~4,
-                                  LEVEL>=4~3,
-                                  LEVEL>=2~2,
-                                  LEVEL>=1~1,
-                                  TRUE~0))%>%
-  mutate(ID = paste0(Station,'_',Season))%>%
+ upload%>%
+   mutate(LEVEL=round(LEVEL))%>%
+   mutate(ID = paste0(Station,'_',Season))%>%
   select(ID,LEVEL)%>%
   arrange(ID)%>%
   fwrite('./xgboost_reg_v5_tuning_grid.csv',row.names = FALSE)
@@ -172,11 +182,13 @@ upload_data <- xgb.DMatrix(data =data.matrix(upload[-35]))
 param <- list("objective" = "reg:linear", 
               "eval_metric" = "mae",
               'colsample_bytree' = 0.7,
-              'subsample' = 0.7,
+              'subsample' = 0.5,
               'max_depth' = 6,
               'eta' = 0.1,
-              'seed' = 12345)
-nround    <- 500 # number of XGBoost rounds
+              'seed' = 12345,
+              'min_child_wright'=0.3
+              )
+nround    <- 300 # number of XGBoost rounds
 xgb_model = xgboost(param = param,  data = train_matrix, nrounds = 200, print_every_n = 10)
 train_pred = predict(xgb_model,test_matrix)
 
@@ -196,5 +208,3 @@ test = read.csv('./test.csv')
 nround    <- 300 # number of XGBoost rounds
 xgb_model = xgboost(param = param,  data = full_matrix, nrounds = 200, print_every_n = 10)
 test$LEVEL= round(predict(xgb_model,upload_data))
-# write
-test%>% 
