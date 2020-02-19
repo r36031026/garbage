@@ -1,0 +1,4 @@
+  k= train%>%
+    bind_rows(test)%>%
+    filter_all(any_vars(grepl(pattern="(瑞芳|大城|青草|分洪道|六輕|白玉|白水|濆水|慶安北路|通宵|竹圍|國聖|布袋)", .)))%>%
+    mutate(most_polluted_13 = 1)
