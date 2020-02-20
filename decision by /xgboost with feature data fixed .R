@@ -3,9 +3,10 @@ library(xgboost)
 library(data.table)
 library(dplyr)
 library(psych)
+library(tidyr)
 
-train = read.csv('./train revise.csv')
-test = read.csv('./test revise.csv')
+train = read.csv('../train-revise.csv')
+test = read.csv('../test-revise.csv')
 #### most polluted 13 ####
 most_polluted13 = train%>%
   bind_rows(test)%>%
@@ -65,80 +66,83 @@ all = train%>%
   # make it factor for xgboost 
   mutate(Station = as.factor(Station))%>%
   mutate(County = as.factor(County))%>%
-  mutate(Location = as.factor(Location))%>%
-# if need all numeric then use this but it got worse somehow 
-  mutate(Station = as.numeric(Station))%>%
-  mutate(County = as.numeric(County))%>%
-  mutate(Location = as.numeric(Location))%>%
-  mutate(place_order_one_column = as.numeric(place_order_one_column))%>%
-  mutate(stationEN_place =as.numeric(stationEN_place))%>%
-  mutate(station_EN = as.numeric(station_EN))
+  mutate(Location = as.factor(Location))
+
 # remove the bad features
 
 sapply(all, function(x) sum(is.na(x)))
 all%>%glimpse()
-# some mapping table of mean and sd with level info 
-# City_season = train%>%
-#   group_by(縣市,Season)%>%
-#   summarise(mean_city_season = mean(LEVEL,na.rm= T),
-#          sd_city_season = sd(LEVEL,na.rm =T))%>%
-#   ungroup()
-# 
-# City= train%>%  
-#   group_by(縣市)%>%
-#   summarise(mean_county = mean(LEVEL,na.rm= T),
-#          sd_city = sd(LEVEL,na.rm =T),
-#          max_city = max(LEVEL),
-#          min_city = min(LEVEL),
-#          median_city = median(LEVEL)
-#   )%>%
-#   ungroup()
-# 
-# Season_seat = train%>%  group_by(Season,Seat)%>%
-#   summarise(mean_season_seat = mean(LEVEL,na.rm = T),
-#          sd_season_seat = sd(LEVEL,na.rm =T),
-#          max_season_seat = max(LEVEL),
-#          min_season_seat = min(LEVEL),
-#          median_season_seat = median(LEVEL)
-#   )%>%
-#   ungroup()
-#   
-# Seat = train%>%
-#   group_by(Seat)%>%
-#   summarise(mean_seat = mean(LEVEL,na.rm = T),
-#          sd_seat = sd(LEVEL,na.rm = T),
-#          max_seat = max(LEVEL),
-#          min_seat = min(LEVEL),
-#          median_seat = median(LEVEL))%>%
-#   ungroup()
-# 
-# CSS = train%>%
-#   group_by(縣市,Season,Seat)%>%
-#   summarise(mean_CSS = mean(LEVEL,na.rm = T),
-#          sd_CSS = sd(LEVEL,na.rm = T),
-#          max_CSS = max(LEVEL),
-#          min_CSS = min(LEVEL),
-#          median_CSS = median(LEVEL)
-#   )
-# 
-# all = all%>%
-#   left_join(City)%>%
-#   left_join(City_season)%>%
-#   left_join(CSS)%>%
-#   left_join(Seat)
 
-# feature engineering 
-# back to train and test with all numeric columns
+
+# the train and upload split back
 train = all %>% filter(!is.na(LEVEL))
 upload = all %>% filter(is.na(LEVEL))
+train_label = train$LEVEL
+upload_label = upload$LEVEL
+
+train = train%>%select(-LEVEL)
+upload = upload%>%select(-LEVEL)
+
+#### modeling train--> train/test --> model ####
+# Full data set
+train_index <- sample(1:nrow(train), nrow(train)*0.75)
+
+# split train data and make xgb.DMatrix
 
 
-fit_rf <- train(LEVEL ~ ., data=train, method='rf') 
-test$LEVEL = predict(fit_rf,newdata= upload)
-# write
-test%>%  
-  mutate(LEVEL = round(LEVEL))%>%
+trainMatrix<-sparse.model.matrix(~.-1,data=train[train_index,])
+model = xgboost(trainMatrix,label = train_label[train_index],nrounds=300)
+
+# split test data and make xgb.DMatrix
+testMatrix<-sparse.model.matrix(~.-1,data=train[-train_index,])
+testMatrix
+# full data set 
+fullMatrix = sparse.model.matrix(~.-1,data=train)
+fullMatrix
+# upload date 
+uploadMatrix = sparse.model.matrix(~.-1,data=upload)
+uploadMatrix
+#### train and test part 1 ####
+# xgboost find best cv 
+param <- list("objective" = "reg:linear", 
+              "eval_metric" = "mae",
+              'colsample_bytree' = 0.7,
+              'subsample' = 0.5,
+              'max_depth' = 6,
+              'eta' = 0.1,
+              'seed' = 12345,
+              'min_child_wright'=0.3
+)
+nround    <- 300 # number of XGBoost rounds
+
+test = predict(model,newdata = testMatrix)
+test
+# # confusion matrix
+# confusionMatrix(factor(round(test)),
+#                 factor(round(train_label[-train_index])),
+#                 mode = "everything")
+
+# local leaderboard
+temp=cohen.kappa(
+  factor(round(test))%>%
+    cbind(
+      factor(round(train_label[-train_index]))))
+temp$weighted.kappa
+
+#### full / upload ####
+test = read.csv('./test.csv')
+nround    <- 300 # number of XGBoost rounds
+xgb_model = xgboost(data = fullMatrix, label = train_label,print_every_n = 10,nrounds = 300)
+xgb.importance(feature_names = names(uploadMatrix), model = xgb_model, trees = NULL,
+               data = NULL, label = NULL, target = NULL)
+
+test$LEVEL= round(predict(xgb_model,uploadMatrix))
+library(Matrix)
+iris%>%glimpse
+trainMatrix<-sparse.model.matrix(Species~.,data=iris%>%mutate(Species2=Species))
+xgboost(trainMatrix,label = iris$Species,nrounds=100)
+test%>%
+  mutate(LEVEL=round(LEVEL))%>%
   mutate(ID = paste0(Station,'_',Season))%>%
   select(ID,LEVEL)%>%
-  fwrite('./rf_v2_numericf.csv',row.names = FALSE)
-
+  write.csv('./0220_xgboost.csv',row.names = F)
